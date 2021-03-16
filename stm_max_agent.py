@@ -61,6 +61,7 @@ class StmMaxAgent:
             session.set_status('running')
 
             self.take_data = True
+            session.data = {"fields": {}}
 
             while self.take_data:
                 current_time = time.time()
