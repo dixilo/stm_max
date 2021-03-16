@@ -11,6 +11,8 @@ from max31856 import Max31856
 SPI_BUS_DEFAULT = [0, 0, 0, 0]
 CS_LIST_DEFAULT = [1, 0, 2, 3]
 MAX_PARAMETERS = ['nrf50', 'avgsel', 'tc_type']
+LOCK_RELEASE_SEC = 1.
+LOCK_RELEASE_TIMEOUT = 10
 
 class StmMaxAgent:
     '''OCS agent class for MAX31856 board
@@ -55,15 +57,24 @@ class StmMaxAgent:
         with self.lock.acquire_timeout(timeout=0, job='acq') as acquired:
             if not acquired:
                 self.log.warn(
-                    "Could not start acq because {} is already running".format(self.lock.job))
-                return False, "Could not acquire lock."
+                    f'Could not start acq because {self.lock.job} is already running')
+                return False, 'Could not acquire lock.'
 
             session.set_status('running')
 
             self.take_data = True
             session.data = {"fields": {}}
+            last_release = time.time()
 
             while self.take_data:
+                # Release lock
+                if time.time() - last_release > LOCK_RELEASE_SEC:
+                    last_release = time.time()
+                    if not self.lock.release_and_acquire(timeout=LOCK_RELEASE_TIMEOUT):
+                        print(f'Re-acquire failed: {self.lock.job}')
+                        return False, 'Could not re-acquire lock.'
+
+                # Data acquisition
                 current_time = time.time()
                 data = {'timestamp':current_time, 'block_name':'temps', 'data':{}}
 
@@ -119,11 +130,11 @@ class StmMaxAgent:
         if params is None:
             params = {}
 
-        with self.lock.acquire_timeout(0, job='set_values') as acquired:
+        with self.lock.acquire_timeout(3, job='set_values') as acquired:
             if not acquired:
                 self.log.warn('Could not start set_values because '
                               f'{self.lock.job} is already running')
-                return False, "Could not acquire lock."
+                return False, 'Could not acquire lock.'
 
             dev_inst = self.devices[params['channnel']]
 
@@ -136,6 +147,31 @@ class StmMaxAgent:
             dev_inst.config(conf)
 
         return True, f'Set values for channel {params["channel"]}'
+
+    def get_values(self, session, params=None):
+        '''A task to provide configuration information'''
+        if params is None:
+            params = {}
+
+        with self.lock.acquire_timeout(3, job='get_values') as acquired:
+            if not acquired:
+                self.log.warn('Could not start set_values because '
+                              f'{self.lock.job} is already running')
+                return False, 'Could not acquire lock.'
+
+            dev_inst = self.devices[params['channnel']]
+
+            conf = dev_inst.config
+            session.data = {'cmode': conf.cmode,
+                            'ocfault': conf.ocfault,
+                            'cj_disabled': conf.cj_disabled,
+                            'fault': conf.fault,
+                            'nrf50': conf.nrf50,
+                            'avgsel': conf.avgsel,
+                            'tc_type': conf.tc_type}
+
+        return True, f'Got values for channel {params["channel"]}'
+
 
 
 def main():
@@ -153,6 +189,11 @@ def main():
     agent_inst.register_task(
         'set_values',
         stm_max_agent.set_values
+    )
+
+    agent_inst.register_task(
+        'get_values',
+        stm_max_agent.get_values
     )
 
     agent_inst.register_process(
