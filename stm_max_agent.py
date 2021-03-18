@@ -136,13 +136,13 @@ class StmMaxAgent:
                               f'{self.lock.job} is already running')
                 return False, 'Could not acquire lock.'
 
-            dev_inst = self.devices[params['channnel']]
+            dev_inst = self.devices[params['channel']]
 
             conf = dev_inst.config
 
             for key, val in params.items():
                 if key in MAX_PARAMETERS:
-                    conf[key] = val
+                    setattr(conf, key, val)
 
             dev_inst.config(conf)
 
@@ -159,7 +159,7 @@ class StmMaxAgent:
                               f'{self.lock.job} is already running')
                 return False, 'Could not acquire lock.'
 
-            dev_inst = self.devices[params['channnel']]
+            dev_inst = self.devices[params['channel']]
 
             conf = dev_inst.config
             session.data = {'cmode': conf.cmode,
