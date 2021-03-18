@@ -144,7 +144,7 @@ class StmMaxAgent:
                 if key in MAX_PARAMETERS:
                     setattr(conf, key, val)
 
-            dev_inst.config(conf)
+            dev_inst.config = conf
 
         return True, f'Set values for channel {params["channel"]}'
 
